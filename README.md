@@ -4,7 +4,7 @@ An end-to-end lead nurturing pipeline built in **n8n** that captures inbound lea
 
 It uses **Groq (Llama 3.3 70B)** to qualify and write personalized outreach, **HubSpot** as the CRM of record, and **Gmail / Twilio / Slack** as delivery channels — so leads get the right message, on the right channel, at the right time, automatically.
 
-![Workflow overview](./workflow-diagram.png)
+![Workflow overview](./workflow-diagram.jpeg)
 
 ---
 
