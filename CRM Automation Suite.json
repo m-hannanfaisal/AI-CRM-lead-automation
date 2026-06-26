@@ -1,0 +1,1038 @@
+{
+  "name": "CRM Automation Suite — HubSpot + Groq + Email + SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7ed1eacf-be87-4e0c-8877-8bd3635acfac",
+      "name": "Webhook — Receive Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1328,
+        80
+      ],
+      "webhookId": "crm-lead-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Lead received.",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "eeadf9ee-93a8-4f7d-af8c-4fb07c68aee6",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1328,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "name",
+              "stringValue": "={{ $json.body.name }}"
+            },
+            {
+              "name": "email",
+              "stringValue": "={{ $json.body.email }}"
+            },
+            {
+              "name": "phone",
+              "stringValue": "={{ $json.body.phone }}"
+            },
+            {
+              "name": "company",
+              "stringValue": "={{ $json.body.company }}"
+            },
+            {
+              "name": "message",
+              "stringValue": "={{ $json.body.message }}"
+            },
+            {
+              "name": "source",
+              "stringValue": "={{ $json.body.source }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d3a90965-bddb-428a-8336-9d0ce7ded326",
+      "name": "Set — Map Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        -1104,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.2,\n  \"max_tokens\": 400,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an expert sales lead qualification AI. Analyze the lead and return ONLY a raw JSON object — no markdown, no backticks, no explanation. Respond with exactly this format:\\n{\\n  \\\"score\\\": \\\"Hot\\\" or \\\"Warm\\\" or \\\"Cold\\\",\\n  \\\"priority\\\": a number 1-10,\\n  \\\"reason\\\": \\\"One sentence why\\\",\\n  \\\"buying_intent\\\": \\\"High\\\" or \\\"Medium\\\" or \\\"Low\\\",\\n  \\\"suggested_approach\\\": \\\"One sentence on how to approach this lead\\\",\\n  \\\"email_subject\\\": \\\"A compelling subject line for the first email\\\"\\n}\\n\\nHot = strong buying intent, specific need, decision maker. Warm = interested but vague. Cold = just browsing.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Lead info:\\nName: {{ $json.name }}\\nCompany: {{ $json.company }}\\nEmail: {{ $json.email }}\\nPhone: {{ $json.phone }}\\nMessage: {{ $json.message }}\\nSource: {{ $json.source }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "c17df7cd-bae4-4d39-ae13-9b3056410ea1",
+      "name": "Groq — Score Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -880,
+        80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TZziUn7tAvEHQheq",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Set — Map Fields').first().json;\nconst groqRaw = $input.first().json?.choices?.[0]?.message?.content ?? '{}';\nconst cleaned = groqRaw.replace(/```json\\s*/gi,'').replace(/```\\s*/gi,'').trim();\n\nlet ai;\ntry { ai = JSON.parse(cleaned); }\ncatch(e) {\n  ai = { score:'Warm', priority:5, reason:'Parse error', buying_intent:'Medium', suggested_approach:'Send a friendly intro email.', email_subject:'Following up on your enquiry' };\n}\n\nreturn [{\n  json: {\n    ...lead,\n    lead_score:          ai.score,\n    lead_priority:       ai.priority,\n    lead_reason:         ai.reason,\n    buying_intent:       ai.buying_intent,\n    suggested_approach:  ai.suggested_approach,\n    email_subject:       ai.email_subject\n  }\n}];"
+      },
+      "id": "6fcfb336-b102-4ba5-9fc0-8dd4f40d7f39",
+      "name": "Code — Parse AI Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "appToken",
+        "operation": "create"
+      },
+      "id": "23d636b1-c4fa-4648-b122-6367d2506b29",
+      "name": "HubSpot — Create Contact",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        80
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "dajcpfshd3r4ocCx",
+          "name": "HubSpot account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "value": "1PPQ1odX2VgvW0WNBMZ0zuGseCERgpnv167MAjNLnXMA",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1PPQ1odX2VgvW0WNBMZ0zuGseCERgpnv167MAjNLnXMA/edit?usp=drivesdk"
+        },
+        "options": {}
+      },
+      "id": "4e21dc6e-1ef0-45eb-9d59-ab5953cb31b7",
+      "name": "Google Sheets — Log Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        -432,
+        320
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "FxyM9wDdowuRmuq0",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "hot-check",
+              "leftValue": "={{ $json.lead_score }}",
+              "rightValue": "Hot",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "790e83db-543f-4d22-af5e-c06f8913bc94",
+      "name": "IF — Is Hot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        80
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "warm-check",
+              "leftValue": "={{ $json.lead_score }}",
+              "rightValue": "Warm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "06fefa32-22d5-49ab-a5bd-44695def643a",
+      "name": "IF — Is Warm?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        352
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 500,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You write short, warm, personalized sales emails. Write in plain text only — no HTML, no markdown. Max 120 words. Sound human, not like a bot. End with a clear call to action to book a call or reply.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a first-contact email for this HOT lead. They have high buying intent — be direct and enthusiastic.\\n\\nLead: {{ $json.name }} from {{ $json.company }}\\nTheir message: {{ $json.message }}\\nSuggested approach: {{ $json.suggested_approach }}\\n\\nSign off as 'The Team'. Do not include a subject line.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "0e9052af-68f7-4ce3-ba96-4647ba384e9b",
+      "name": "Groq — Write Hot Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TZziUn7tAvEHQheq",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Code — Parse AI Score').first().json;\nconst emailBody = $input.first().json?.choices?.[0]?.message?.content ?? 'Thank you for reaching out. We will contact you shortly.';\nreturn [{ json: { ...lead, emailBody } }];"
+      },
+      "id": "88fec6ad-ec43-49b7-a457-5fa052abbc92",
+      "name": "Code — Parse Hot Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.email }}",
+        "subject": "={{ $json.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "e8247390-1fa6-4dfa-8709-4d70c9399df6",
+      "name": "Gmail — Send Hot Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "webhookId": "f4ec96c6-9d14-4599-8b67-6a4be95f83e9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OFz5cdXaB6JhKH7B",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+16183864323",
+        "to": "=+923226609795",
+        "message": "=H{{ $json.body.name }}i , thanks for reaching out! We saw your message and would love to connect ASAP. Reply here or book a call: YOUR_CALENDLY_LINK_HERE",
+        "options": {}
+      },
+      "id": "30c0e28b-b27f-40a6-91e7-016aefe5127b",
+      "name": "Twilio — Hot SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        448,
+        128
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "CTMnamR3inqfvfuZ",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09H8A962SJ",
+          "mode": "list",
+          "cachedResultName": "all-hannan-crew"
+        },
+        "text": "=:fire: *HOT LEAD — Act Now!*\n\n*Name:* {{ $json.body.name }}\n*Company:* {{ $json.body.company }}\n*Email:* {{ $json.body.email }}\n*Phone:* {{ $json.body.phone }}\n*Priority:* {{ $json.lead_priority }}/10\n\n*Their message:*\n> {{ $json.message }}\n\n*AI suggested approach:*\n> {{ $json.suggested_approach }}\n\n_Email + SMS sent automatically. Follow up within 1 hour!_",
+        "otherOptions": {}
+      },
+      "id": "4fbb64fc-c64e-4a96-9329-91e128143525",
+      "name": "Slack — Hot Lead Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [
+        448,
+        240
+      ],
+      "webhookId": "b5c88e0a-582e-4ebf-b251-4ca70f1ce7c3",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "va25UDMUxfEJA9jA",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 500,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You write short, warm, personalized sales emails. Write in plain text only — no HTML, no markdown. Max 100 words. Sound human, friendly, and low-pressure. No hard sell.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a Day 1 intro email for this WARM lead. They are interested but not urgent.\\n\\nLead: {{ $json.name }} from {{ $json.company }}\\nTheir message: {{ $json.message }}\\nSuggested approach: {{ $json.suggested_approach }}\\n\\nSign off as 'The Team'. Do not include a subject line.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "cdbc9cce-15f2-401f-abb9-6165cbff19ff",
+      "name": "Groq — Write Warm Day 1 Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        272
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TZziUn7tAvEHQheq",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('IF — Is Warm?').first().json;\nconst emailBody = $input.first().json?.choices?.[0]?.message?.content ?? 'Thank you for your interest. We will be in touch soon.';\nreturn [{ json: { ...lead, emailBody } }];"
+      },
+      "id": "b0f873df-7ed3-49b9-824a-c2fde7e8555b",
+      "name": "Code — Parse Warm Day 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "=\"email\": \"ahmed@khanenterprises.com\"",
+        "subject": "Thanks for reaching out",
+        "emailType": "text",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "02bafa5b-d5d5-4a12-8457-270207502d3a",
+      "name": "Gmail — Warm Day 1 Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        448,
+        368
+      ],
+      "webhookId": "f8edfc81-ceed-42a0-b07d-e0a0f668e7cc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OFz5cdXaB6JhKH7B",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "days"
+      },
+      "id": "e69bc9c8-6137-458d-b3a5-09e87badd0c0",
+      "name": "Wait — 3 Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        672,
+        368
+      ],
+      "webhookId": "d8daca36-7397-4dae-849c-fffb5e7ed4c7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 500,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You write short follow-up sales emails. Plain text only — no HTML, no markdown. Max 100 words. Reference that you emailed a few days ago. Include a soft call to action.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a Day 3 follow-up email for this warm lead. We emailed them 3 days ago with no reply.\\n\\nLead: {{ $json.name }} from {{ $json.company }}\\nOriginal message: {{ $json.message }}\\n\\nSign off as 'The Team'. Do not include a subject line.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "f8ead6b4-ef08-4101-81cb-f7cd4bc924ff",
+      "name": "Groq — Write Warm Day 3 Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        368
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TZziUn7tAvEHQheq",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Wait — 3 Days').first().json;\nconst emailBody = $input.first().json?.choices?.[0]?.message?.content ?? 'Just following up on our previous email. Would love to connect!';\nreturn [{ json: { ...lead, emailBody } }];"
+      },
+      "id": "42e491e3-031f-4eea-bae2-3142608b3a17",
+      "name": "Code — Parse Warm Day 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Re: {{ $json.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "aa77a14d-268e-49ee-bd59-8b52df8ab4a6",
+      "name": "Gmail — Warm Day 3 Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        368
+      ],
+      "webhookId": "a2ea9801-3f07-429f-9d24-b677b36450bf",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OFz5cdXaB6JhKH7B",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "YOUR_TWILIO_NUMBER_HERE",
+        "to": "={{ $json.phone }}",
+        "message": "=Hi {{ $json.name.split(' ')[0] }}, just sent you a follow-up email. Would love to chat when you're ready! Reply here anytime.",
+        "options": {}
+      },
+      "id": "494ea313-58af-4f4d-b71e-7c5a14ff41d9",
+      "name": "Twilio — Warm Day 3 SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        576
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "CTMnamR3inqfvfuZ",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 400,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You write short educational drip emails for cold leads. Plain text only. Max 80 words. No sales pressure. Provide one useful insight or tip. End with a soft P.S. inviting them to reply when ready.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a gentle Week 1 nurture email for this cold lead.\\n\\nLead: {{ $json.name }} from {{ $json.company }}\\nOriginal message: {{ $json.message }}\\n\\nSign off as 'The Team'. Do not include a subject line.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "5048521e-ad87-4a6f-a6f9-e75a2f445fe0",
+      "name": "Groq — Write Cold Week 1 Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        576
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TZziUn7tAvEHQheq",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('IF — Is Warm?').first().json;\nconst emailBody = $input.first().json?.choices?.[0]?.message?.content ?? 'Thanks for connecting. We will keep you in the loop!';\nreturn [{ json: { ...lead, emailBody } }];"
+      },
+      "id": "85fbe79c-8423-428e-bbab-3c84b90bf82f",
+      "name": "Code — Parse Cold Week 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.email }}",
+        "subject": "=A quick tip for {{ $json.body.company }}",
+        "emailType": "text",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "933cdc2b-01fc-4079-bcb7-998c36e2d51d",
+      "name": "Gmail — Cold Week 1 Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        448,
+        576
+      ],
+      "webhookId": "e325e4bb-0b50-4ceb-9ef2-80e96b03a6a6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OFz5cdXaB6JhKH7B",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "days"
+      },
+      "id": "e30566c5-35e6-489e-a2d2-7d8179b3e447",
+      "name": "Wait — 30 Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        688,
+        576
+      ],
+      "webhookId": "1f482c80-6f43-4565-8015-304f5d7ee518"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.2,\n  \"max_tokens\": 300,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a lead qualification AI. Re-score a cold lead after 30 days. Return ONLY raw JSON — no markdown, no backticks.\\n{\\n  \\\"score\\\": \\\"Hot\\\" or \\\"Warm\\\" or \\\"Cold\\\",\\n  \\\"priority\\\": 1-10,\\n  \\\"reason\\\": \\\"One sentence\\\"\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Re-score this lead after 30 days in cold nurture. Have they shown more intent?\\n\\nName: {{ $json.name }}\\nCompany: {{ $json.company }}\\nOriginal message: {{ $json.message }}\\nOriginal score: {{ $json.lead_score }}\\n\\nIf original message had specific use-case details, upgrade to Warm. Otherwise keep Cold.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "ee091f20-c877-4ec9-94b2-27c6c635712c",
+      "name": "Groq — Re-score Cold Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        592
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TZziUn7tAvEHQheq",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Wait — 30 Days').first().json;\nconst raw = $input.first().json?.choices?.[0]?.message?.content ?? '{}';\nconst cleaned = raw.replace(/```json\\s*/gi,'').replace(/```\\s*/gi,'').trim();\nlet ai;\ntry { ai = JSON.parse(cleaned); }\ncatch(e) { ai = { score: 'Cold', priority: 3, reason: 'Still cold after 30 days.' }; }\nreturn [{ json: { ...lead, lead_score: ai.score, lead_priority: ai.priority, lead_reason: ai.reason } }];"
+      },
+      "id": "629545fe-6fdd-4372-b304-e54a6ead77d1",
+      "name": "Code — Parse Re-score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "appToken",
+        "operation": "update"
+      },
+      "id": "9e778247-3734-4b49-9139-3b91d6acf83f",
+      "name": "HubSpot — Update to Qualified",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        672,
+        128
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "dajcpfshd3r4ocCx",
+          "name": "HubSpot account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "appToken",
+        "operation": "update"
+      },
+      "id": "97c4a117-36c6-495b-8c05-19cafa944523",
+      "name": "HubSpot — Update Re-scored Lead",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        848
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "dajcpfshd3r4ocCx",
+          "name": "HubSpot account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook — Receive Lead": [
+      {
+        "json": {
+          "headers": {
+            "host": "localhost:5678",
+            "user-agent": "curl/8.19.0",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "content-length": "299"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "name": "Ahmed Khan",
+            "email": "ahmed@khanenterprises.com",
+            "phone": "+923001234567",
+            "company": "Khan Enterprises",
+            "message": "We need to automate our entire sales process. We have 500 leads per month and no system to manage them. Looking for something to deploy within 2 weeks.",
+            "source": "Website Form"
+          },
+          "webhookUrl": "http://localhost:5678/webhook-test/crm-lead",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook — Receive Lead": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set — Map Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set — Map Fields": {
+      "main": [
+        [
+          {
+            "node": "Groq — Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq — Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Code — Parse AI Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code — Parse AI Score": {
+      "main": [
+        [
+          {
+            "node": "HubSpot — Create Contact",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Sheets — Log Lead",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF — Is Hot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Is Hot?": {
+      "main": [
+        [
+          {
+            "node": "Groq — Write Hot Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF — Is Warm?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Is Warm?": {
+      "main": [
+        [
+          {
+            "node": "Groq — Write Warm Day 1 Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Groq — Write Cold Week 1 Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq — Write Hot Email": {
+      "main": [
+        [
+          {
+            "node": "Code — Parse Hot Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code — Parse Hot Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Send Hot Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Twilio — Hot SMS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack — Hot Lead Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot — Update to Qualified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq — Write Warm Day 1 Email": {
+      "main": [
+        [
+          {
+            "node": "Code — Parse Warm Day 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code — Parse Warm Day 1": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Warm Day 1 Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail — Warm Day 1 Email": {
+      "main": [
+        [
+          {
+            "node": "Wait — 3 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait — 3 Days": {
+      "main": [
+        [
+          {
+            "node": "Groq — Write Warm Day 3 Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq — Write Warm Day 3 Email": {
+      "main": [
+        [
+          {
+            "node": "Code — Parse Warm Day 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code — Parse Warm Day 3": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Warm Day 3 Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Twilio — Warm Day 3 SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq — Write Cold Week 1 Email": {
+      "main": [
+        [
+          {
+            "node": "Code — Parse Cold Week 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code — Parse Cold Week 1": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Cold Week 1 Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail — Cold Week 1 Email": {
+      "main": [
+        [
+          {
+            "node": "Wait — 30 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait — 30 Days": {
+      "main": [
+        [
+          {
+            "node": "Groq — Re-score Cold Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq — Re-score Cold Lead": {
+      "main": [
+        [
+          {
+            "node": "Code — Parse Re-score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code — Parse Re-score": {
+      "main": [
+        [
+          {
+            "node": "HubSpot — Update Re-scored Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "be51e1d4-1cee-4ba9-9b37-5b20518db76a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1a40683457e603ad542c68c27986b0ff886ecf8cf9f5803c80b8830c6ee86d04"
+  },
+  "id": "vLWEzPJaQpTPXjnD",
+  "tags": []
+}
